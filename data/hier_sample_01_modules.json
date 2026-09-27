@@ -1,0 +1,45 @@
+{
+  "name": "层次化静态1冒险 (inv + or2 组合)",
+  "description": "登记两个带版本的门级模块 inv@1（NOT，[1,3]）与 or2@1（OR，[1,1]），再创建组合 h_haz：i0=inv(a)→wire w，o0=or2(a,w)→z。展开后等价于扁平示例 sample_01（z=OR(a,NOT(a))），a 由 1 跳 0 时出现负脉冲。race_paths/波形中的门节点带实例路径（i0/y、o0/y）与端口映射（o0.b←w）。",
+  "modules": [
+    {
+      "name": "inv",
+      "version": "1",
+      "inputs": ["a"],
+      "outputs": ["y"],
+      "gates": [
+        {"id": "y", "type": "not", "inputs": ["a"], "delay": [1, 3]}
+      ]
+    },
+    {
+      "name": "or2",
+      "version": "1",
+      "inputs": ["a", "b"],
+      "outputs": ["y"],
+      "gates": [
+        {"id": "y", "type": "or", "inputs": ["a", "b"], "delay": [1, 1]}
+      ]
+    }
+  ],
+  "compositions": {
+    "h_haz": {
+      "inputs": ["a"],
+      "outputs": ["z"],
+      "instances": [
+        {"id": "i0", "module": "inv", "version": "1",
+         "connections": {"a": "a", "y": "w"}},
+        {"id": "o0", "module": "or2", "version": "1",
+         "connections": {"a": "a", "b": "w", "y": "z"}}
+      ]
+    }
+  },
+  "analyze": {
+    "composition": "h_haz",
+    "params": {
+      "initial": {"a": 1},
+      "final": {"a": 0},
+      "windows": {"a": [2, 2]},
+      "outputs": [{"name": "z", "min_pulse_width": 3, "max_transitions": 2}]
+    }
+  }
+}

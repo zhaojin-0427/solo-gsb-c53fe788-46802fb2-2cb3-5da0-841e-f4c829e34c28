@@ -1,0 +1,21 @@
+{
+  "name": "双路径重汇聚竞争 (XOR)",
+  "description": "z = XOR(BUF(a), NOT(a))。两条路径延迟不同：NOT 快、BUF 慢时，输出在终态 0 之前出现一个宽度为 1 的正脉冲（动态/静态冒险），可被 min_pulse_width=3 或 max_transitions=1 检出。",
+  "netlist": {
+    "inputs": ["a"],
+    "gates": [
+      {"id": "f", "type": "buf", "inputs": ["a"], "delay": [1, 6]},
+      {"id": "g", "type": "not", "inputs": ["a"], "delay": [1, 1]},
+      {"id": "z", "type": "xor", "inputs": ["f", "g"], "delay": [0, 0]}
+    ],
+    "outputs": ["z"]
+  },
+  "params": {
+    "initial": {"a": 0},
+    "final": {"a": 1},
+    "windows": {"a": [2, 2]},
+    "outputs": [
+      {"name": "z", "min_pulse_width": 3, "max_transitions": 1}
+    ]
+  }
+}

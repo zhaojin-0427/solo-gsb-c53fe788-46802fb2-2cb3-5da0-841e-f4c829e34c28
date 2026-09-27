@@ -1,0 +1,36 @@
+services:
+  hazard-bench:
+    build: .
+    image: hazard-bench:latest
+    container_name: hazard-bench
+    ports:
+      - "8000:8000"
+    volumes:
+      - hazard-data:/data
+    environment:
+      # 规模上限（默认值如下，可按需调大/调小）
+      HAZARD_MAX_GATES: "200"
+      HAZARD_MAX_NODES: "300"
+      HAZARD_MAX_HORIZON: "250"
+      HAZARD_MAX_CELLS: "40000"
+      HAZARD_TIMEOUT_MS: "25000"
+      # 层次模块库：展开（压平）规模上限
+      HAZARD_HIER_MAX_GATES: "2000"
+      HAZARD_HIER_MAX_DEPTH: "100"
+      # 修订行为等价审计：同步枚举器规模/时间预算
+      HAZARD_AUDIT_MAX_GATES: "40"
+      HAZARD_AUDIT_MAX_HORIZON: "120"
+      HAZARD_AUDIT_MAX_INPUT_ASSIGNMENTS: "10000"
+      HAZARD_AUDIT_MAX_TRAJECTORIES: "200000"
+      HAZARD_AUDIT_TIMEOUT_S: "5"
+      # ⑦ 反例驱动修复搜索：z3 约束优化规模/时间预算
+      HAZARD_REPAIR_MAX_GATES: "60"
+      HAZARD_REPAIR_MAX_HORIZON: "250"
+      HAZARD_REPAIR_SOLVER_TIMEOUT_MS: "20000"
+      HAZARD_REPAIR_MAX_BAD_KEYS: "200"
+      HAZARD_REPAIR_MAX_SAFE_PER_LEVEL: "30"
+      HAZARD_REPAIR_MAX_VERIFICATIONS: "30"
+    restart: unless-stopped
+
+volumes:
+  hazard-data:

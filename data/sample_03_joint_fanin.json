@@ -1,0 +1,24 @@
+{
+  "name": "同刻双扇入共同触发 (OR 窄脉冲重汇聚)",
+  "description": "单输入 a 由 0 跳 1；两条 AND(a, NOT(a)) 支路在零延迟下产生宽度 2 与宽度 1 的正脉冲，OR 汇聚后在 t=2 由两条支路同刻共同 0→1（单独撤回任一支路，输出仍为 1，不能恢复旧值），t=4 由慢支路单独拉回，形成宽度 2 的窄脉冲。竞争路径会保留两条共同触发链并分别回溯到主输入 a。",
+  "netlist": {
+    "inputs": ["a"],
+    "gates": [
+      {"id": "n1", "type": "not", "inputs": ["a"], "delay": [2, 2]},
+      {"id": "n2", "type": "not", "inputs": ["a"], "delay": [1, 1]},
+      {"id": "s1", "type": "and", "inputs": ["a", "n1"], "delay": [0, 0]},
+      {"id": "s2", "type": "and", "inputs": ["a", "n2"], "delay": [0, 0]},
+      {"id": "z", "type": "or", "inputs": ["s1", "s2"], "delay": [0, 0]}
+    ],
+    "outputs": ["z"]
+  },
+  "params": {
+    "initial": {"a": 0},
+    "final": {"a": 1},
+    "windows": {"a": [2, 2]},
+    "horizon": 8,
+    "outputs": [
+      {"name": "z", "min_pulse_width": 3, "max_transitions": 2}
+    ]
+  }
+}

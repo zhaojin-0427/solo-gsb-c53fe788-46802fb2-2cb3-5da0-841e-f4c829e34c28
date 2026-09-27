@@ -1,0 +1,20 @@
+{
+  "name": "静态1冒险演示 (OR 重汇聚)",
+  "description": "z = OR(a, NOT(a))。a 由 1 跳 0，若 NOT 路径慢于直接路径，输出会出现一个负脉冲（静态 1 冒险）。",
+  "netlist": {
+    "inputs": ["a"],
+    "gates": [
+      {"id": "w1", "type": "not", "inputs": ["a"], "delay": [1, 3]},
+      {"id": "z", "type": "or", "inputs": ["a", "w1"], "delay": [1, 1]}
+    ],
+    "outputs": ["z"]
+  },
+  "params": {
+    "initial": {"a": 1},
+    "final": {"a": 0},
+    "windows": {"a": [2, 2]},
+    "outputs": [
+      {"name": "z", "min_pulse_width": 3, "max_transitions": 2}
+    ]
+  }
+}

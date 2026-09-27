@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>组合电路冒险验证台</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>组合电路冒险验证台</h1>
+  <div class="sub">惯性延迟 · 竞争/毛刺 · 脉冲宽度与跃迁次数约束 · z3 有界验证</div>
+</header>
+
+<nav class="tabs">
+  <button data-tab="setup" class="active">① 导入与参数</button>
+  <button data-tab="netlist">② 网表视图</button>
+  <button data-tab="wave">③ 波形与反例</button>
+  <button data-tab="records">④ 分析记录</button>
+  <button data-tab="hier">⑤ 层次模块库</button>
+  <button data-tab="audit">⑥ 修订等价审计</button>
+  <button data-tab="repair">⑦ 反例修复搜索</button>
+</nav>
+
+<main>
+  <!-- ============ ① 导入与参数 ============ -->
+  <section id="tab-setup" class="tab active">
+    <div class="cols">
+      <div class="col">
+        <h2>网表 JSON</h2>
+        <div class="row">
+          <button id="btn-sample1">载入示例：静态1冒险</button>
+          <button id="btn-sample2">载入示例：MUX竞争</button>
+          <button id="btn-sample3">载入示例：同刻共同触发</button>
+          <label class="filebtn">导入文件<input type="file" id="file-input" accept=".json,application/json" hidden></label>
+        </div>
+        <textarea id="netlist-json" spellcheck="false"
+          placeholder='{"inputs":["a"],"gates":[{"id":"z","type":"not","inputs":["a"],"delay":[1,3]}],"outputs":["z"]}'></textarea>
+        <h2>分析参数</h2>
+        <textarea id="params-json" spellcheck="false"
+          placeholder='{"initial":{"a":1},"final":{"a":0},"windows":{"a":[2,2]},"outputs":[{"name":"z","min_pulse_width":3}]}'></textarea>
+        <div class="row wrap">
+          <button id="btn-validate" class="secondary">校验网表</button>
+          <button id="btn-analyze" class="primary">运行验证</button>
+          <span id="scale-info" class="hint"></span>
+        </div>
+      </div>
+      <div class="col side">
+        <h2>参数表单 <button id="btn-sync-form" class="mini">从 JSON 同步</button></h2>
+        <div id="param-form">
+          <fieldset>
+            <legend>初态 / 终态</legend>
+            <div id="form-states" class="grid2"></div>
+          </fieldset>
+          <fieldset>
+            <legend>输入跃迁窗口 [tmin, tmax]（留空=不跃迁）</legend>
+            <div id="form-windows" class="grid2"></div>
+          </fieldset>
+          <fieldset>
+            <legend>输出约束</legend>
+            <div id="form-outputs"></div>
+          </fieldset>
+          <fieldset>
+            <legend>时间上界 H（留空=自动）</legend>
+            <input type="number" id="form-horizon" min="1" placeholder="auto">
+          </fieldset>
+          <button id="btn-form-json" class="secondary">生成参数 JSON</button>
+        </div>
+        <div id="validate-info" class="infobox"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ② 网表视图 ============ -->
+  <section id="tab-netlist" class="tab">
+    <div class="toolbar">
+      <span class="hint">拓扑层级自动布局；方块为门，圆为主输入，黄色为被约束输出。滚轮缩放，拖拽平移。</span>
+    </div>
+    <canvas id="netlist-canvas"></canvas>
+  </section>
+
+  <!-- ============ ③ 波形 ============ -->
+  <section id="tab-wave" class="tab">
+    <div id="result-banner" class="banner">尚未运行验证。</div>
+    <div class="toolbar">
+      <label>缩放 <input type="range" id="wave-zoom" min="8" max="80" value="28"></label>
+      <label><input type="checkbox" id="wave-fire" checked> 显示门点火点</label>
+      <span class="hint"><span class="lg bad"></span>违规沿（bad_time）
+        <span class="lg edge"></span>窄脉冲的另一条因果沿</span>
+      <button id="wave-export" class="mini">导出反例 JSON</button>
+    </div>
+    <div id="counterexample" class="cex"></div>
+    <canvas id="wave-canvas"></canvas>
+    <div id="wave-paths" class="cex"></div>
+    <div id="wave-hierarchy" class="cex"></div>
+  </section>
+
+  <!-- ============ ④ 记录 ============ -->
+  <section id="tab-records" class="tab">
+    <div class="toolbar"><button id="btn-refresh-records" class="secondary">刷新</button></div>
+    <table id="records-table">
+      <thead><tr>
+        <th>ID</th><th>网表</th><th>网表哈希</th><th>参数哈希</th><th>结论</th><th>时间</th><th></th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- ============ ⑤ 层次模块库 ============ -->
+  <section id="tab-hier" class="tab">
+    <div class="cols">
+      <div class="col">
+        <h2>模块版本库
+          <span>
+            <button id="btn-hier-refresh" class="mini">刷新</button>
+            <button id="btn-hier-sample1" class="mini">载入示例①</button>
+            <button id="btn-hier-sample2" class="mini">载入示例②</button>
+          </span>
+        </h2>
+        <div class="row wrap">
+          <label class="filebtn">导入 JSON 包<input type="file" id="hier-file" accept=".json,application/json" hidden></label>
+          <button id="btn-hier-export" class="secondary">导出整库 JSON</button>
+          <span class="hint">模块版本一经登记不可修改；请用新版本号迭代。</span>
+        </div>
+        <table id="hier-mod-table">
+          <thead><tr><th>模块</th><th>版本</th><th>入/出</th><th>门</th><th>实例</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+
+        <h2>登记新模块版本</h2>
+        <textarea id="hier-module-json" spellcheck="false" style="min-height:130px"
+          placeholder='{"name":"inv","version":"1","inputs":["a"],"outputs":["y"],"gates":[{"id":"y","type":"not","inputs":["a"],"delay":[1,3]}]}'></textarea>
+        <div class="row wrap">
+          <button id="btn-hier-module-validate" class="secondary">校验模块</button>
+          <button id="btn-hier-module-save" class="primary">登记模块版本</button>
+        </div>
+
+        <h2>批量导入 / 导出（modules + compositions）</h2>
+        <textarea id="hier-bundle-json" spellcheck="false" style="min-height:120px"
+          placeholder='{"modules":[...],"compositions":{"名字":{...}}'></textarea>
+        <div class="row">
+          <button id="btn-hier-bundle-import" class="primary">导入整包</button>
+          <span class="hint">同名字同版本已存在且内容相同则跳过；内容不同整包拒绝。</span>
+        </div>
+        <div id="hier-module-info" class="infobox"></div>
+      </div>
+
+      <div class="col side">
+        <h2>组合网表（只含模块实例）
+          <button id="btn-hier-comp-refresh" class="mini">刷新列表</button>
+        </h2>
+        <div class="row wrap">
+          <select id="hier-comp-select" style="flex:1;min-width:160px"></select>
+          <button id="btn-hier-comp-load" class="mini">载入</button>
+          <button id="btn-hier-comp-new" class="mini">新建空白</button>
+          <button id="btn-hier-comp-delete" class="mini">删除</button>
+        </div>
+        <textarea id="hier-comp-json" spellcheck="false" style="min-height:150px"
+          placeholder='{"name":"top","inputs":["a"],"outputs":["z"],"instances":[{"id":"i0","module":"inv","version":"1","connections":{"a":"a","y":"z"}}]}'></textarea>
+        <div class="row wrap">
+          <button id="btn-hier-comp-validate" class="secondary">校验+干跑展开</button>
+          <button id="btn-hier-comp-save" class="primary">保存组合（版本自增）</button>
+          <button id="btn-hier-flatten" class="secondary">查看展开结果</button>
+        </div>
+        <div id="hier-comp-info" class="infobox"></div>
+
+        <h2>组合验证参数</h2>
+        <textarea id="hier-params-json" spellcheck="false" style="min-height:110px"
+          placeholder='{"initial":{"a":1},"final":{"a":0},"windows":{"a":[2,2]},"outputs":[{"name":"z","min_pulse_width":3}]}'></textarea>
+        <div class="row wrap">
+          <button id="btn-hier-analyze" class="primary">运行层次验证</button>
+          <span class="hint">输出名写组合端口；节点显示实例路径与端口映射。</span>
+        </div>
+        <div id="hier-flat-box" class="infobox"></div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:18px">层次分析记录（固定模块版本，可重放）</h2>
+    <table id="hier-records-table">
+      <thead><tr>
+        <th>ID</th><th>组合</th><th>修订</th><th>展开哈希</th><th>结论</th><th>时间</th><th></th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <h2>展开结果（实例路径 / 端口映射 / 局部门延迟）</h2>
+    <div id="hier-flat-detail" class="infobox" style="max-height:340px;overflow:auto"></div>
+  </section>
+
+  <!-- ============ ⑥ 修订行为等价审计 ============ -->
+  <section id="tab-audit" class="tab">
+    <div class="cols">
+      <div class="col">
+        <h2>发起组合修订行为审计
+          <button id="btn-audit-refresh" class="mini">刷新</button>
+        </h2>
+        <div class="row wrap">
+          <select id="audit-comp-select" style="min-width:220px"></select>
+          <button id="btn-audit-comp-load" class="mini">载入修订</button>
+        </div>
+        <div class="cols two">
+          <label>修订 A
+            <select id="audit-left-rev"></select>
+          </label>
+          <label>修订 B
+            <select id="audit-right-rev"></select>
+          </label>
+        </div>
+        <div id="audit-rev-info" class="infobox"></div>
+        <h3>输入跃迁 / 输出约束参数</h3>
+        <textarea id="audit-params-json" spellcheck="false" style="min-height:150px"
+          placeholder='{"initial":{"a":1},"final":{"a":0},"windows":{"a":[2,2]},"outputs":["z"],"horizon":12}'></textarea>
+        <div class="row wrap">
+          <button id="btn-audit-run" class="primary">同步枚举并审计</button>
+          <button id="btn-audit-sample" class="secondary">填入示例参数</button>
+          <span class="hint">输出约束用于声明同名输出和重放，不过滤轨迹，避免漏掉修订引入的毛刺。</span>
+        </div>
+        <div id="audit-info" class="infobox"></div>
+      </div>
+      <div class="col side">
+        <h2>审计结果</h2>
+        <div id="audit-banner" class="banner">尚未发起修订等价审计。</div>
+        <div id="audit-result"></div>
+      </div>
+    </div>
+
+    <h2>审计记录（按修订对与参数哈希去重，可重放/导出）</h2>
+    <div class="toolbar">
+      <button id="btn-audit-records-refresh" class="secondary">刷新记录</button>
+      <button id="btn-audit-export-all" class="secondary">导出记录 JSON</button>
+    </div>
+    <table id="audit-records-table">
+      <thead><tr>
+        <th>ID</th><th>组合</th><th>修订</th><th>参数哈希</th><th>结论</th><th>最早分歧</th><th>时间</th><th>操作</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- ============ ⑦ 反例驱动修复搜索 ============ -->
+  <section id="tab-repair" class="tab">
+    <div class="cols">
+      <div class="col">
+        <h2>1. 选择已保存的违规（unsafe）记录
+          <button id="btn-repair-refresh-sources" class="mini">刷新</button>
+        </h2>
+        <div class="row wrap">
+          <select id="repair-source-kind" style="min-width:120px">
+            <option value="flat">扁平分析记录</option>
+            <option value="hier">层次分析记录</option>
+          </select>
+          <select id="repair-source-id" style="flex:1;min-width:220px"></select>
+          <button id="btn-repair-load" class="mini">载入反例</button>
+        </div>
+        <div id="repair-source-info" class="infobox"></div>
+
+        <h2>2. 可调范围与改动预算</h2>
+        <div class="hint">范围必须包含原值；一个“改动”= 一个门延迟对 / 一个输入窗口 /
+          一个输出约束字段。总偏差=各端点与原值绝对差之和。</div>
+        <h3 style="margin:8px 0 4px">门惯性延迟 [lo,hi] 可调范围</h3>
+        <table id="repair-gates-table" class="repair-table">
+          <thead><tr><th>门</th><th>原值</th><th>允许 lo 起</th><th>允许 hi 止</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <h3 style="margin:8px 0 4px">输入跃迁窗口 [tmin,tmax] 可调范围</h3>
+        <table id="repair-windows-table" class="repair-table">
+          <thead><tr><th>输入</th><th>原窗口</th><th>允许 tmin 起</th><th>允许 tmax 止</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <h3 style="margin:8px 0 4px">输出脉冲约束可调范围</h3>
+        <table id="repair-outputs-table" class="repair-table">
+          <thead><tr><th>输出</th><th>字段</th><th>原值</th><th>允许起</th><th>允许止</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <fieldset style="margin-top:8px">
+          <legend>改动预算</legend>
+          <label class="grid2item">最大改动数
+            <input type="number" id="repair-max-changes" min="0" value="3" style="width:80px"></label>
+          <label class="grid2item">最大总偏差
+            <input type="number" id="repair-max-deviation" min="0" value="20" style="width:80px"></label>
+        </fieldset>
+        <div class="row wrap">
+          <button id="btn-repair-run" class="primary">z3 约束优化搜索</button>
+          <button id="btn-repair-json" class="secondary">查看/编辑请求 JSON</button>
+          <span id="repair-hint" class="hint"></span>
+        </div>
+        <textarea id="repair-request-json" spellcheck="false" style="min-height:120px;display:none"></textarea>
+      </div>
+
+      <div class="col side">
+        <h2>搜索结果</h2>
+        <div id="repair-banner" class="banner idle">尚未发起修复搜索。</div>
+        <div id="repair-evidence" class="infobox"></div>
+        <div id="repair-plans"></div>
+        <div id="repair-unknown" class="infobox"></div>
+        <div id="repair-uncovered" class="infobox"></div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:18px">修复搜索记录（可审计 / 重放 / 导出）</h2>
+    <div class="toolbar">
+      <button id="btn-repair-records-refresh" class="secondary">刷新记录</button>
+      <button id="btn-repair-export-all" class="secondary">导出全部记录 JSON</button>
+      <span class="hint">记录内含源网表/参数快照、规范请求与逐步审计日志。</span>
+    </div>
+    <table id="repair-records-table">
+      <thead><tr>
+        <th>ID</th><th>源记录</th><th>结论</th><th>方案数</th><th>时间</th><th>操作</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+</main>
+
+<div id="toast"></div>
+<script src="/static/app.js"></script>
+<script src="/static/hierarchy.js"></script>
+<script src="/static/audit.js"></script>
+<script src="/static/repair.js"></script>
+</body>
+</html>

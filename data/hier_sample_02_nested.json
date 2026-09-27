@@ -1,0 +1,60 @@
+{
+  "name": "嵌套模块与内部 wire (inv2 内部复用 inv@1)",
+  "description": "演示三层层次：and2@1 是与门；inv2@1 内部实例化 inv@1（与 sample_01 共用同一版本）再加一个与门做 y=AND(inv(a),en)；组合 h_nest 顶层实例化一个 inv2 与一个 and2，实例间通过显式内部 wire q 连接，输出 z 由 and2 汇聚。展开后可看到实例路径 u/u1（三层）以及节点 crossings 中 u.y(输出)→q→v.a(输入) 的端口映射。connections 用 [端口,信号] 数组形式书写（可检测重复映射）。",
+  "modules": [
+    {
+      "name": "inv",
+      "version": "1",
+      "inputs": ["a"],
+      "outputs": ["y"],
+      "gates": [
+        {"id": "y", "type": "not", "inputs": ["a"], "delay": [1, 3]}
+      ]
+    },
+    {
+      "name": "and2",
+      "version": "1",
+      "inputs": ["a", "b"],
+      "outputs": ["y"],
+      "gates": [
+        {"id": "y", "type": "and", "inputs": ["a", "b"], "delay": [0, 0]}
+      ]
+    },
+    {
+      "name": "inv2",
+      "version": "1",
+      "inputs": ["a", "en"],
+      "outputs": ["y"],
+      "wires": ["n"],
+      "instances": [
+        {"id": "u1", "module": "inv", "version": "1",
+         "connections": [["a", "a"], ["y", "n"]]},
+        {"id": "g1", "module": "and2", "version": "1",
+         "connections": [["a", "n"], ["b", "en"], ["y", "y"]]}
+      ]
+    }
+  ],
+  "compositions": {
+    "h_nest": {
+      "inputs": ["a", "en"],
+      "outputs": ["z"],
+      "wires": ["q"],
+      "instances": [
+        {"id": "u", "module": "inv2", "version": "1",
+         "connections": {"a": "a", "en": "en", "y": "q"}},
+        {"id": "v", "module": "and2", "version": "1",
+         "connections": {"a": "q", "b": "en", "y": "z"}}
+      ]
+    }
+  },
+  "analyze": {
+    "composition": "h_nest",
+    "params": {
+      "initial": {"a": 0, "en": 1},
+      "final": {"a": 1, "en": 1},
+      "windows": {"a": [2, 2]},
+      "horizon": 10,
+      "outputs": [{"name": "z", "max_transitions": 0}]
+    }
+  }
+}
